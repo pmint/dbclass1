@@ -17,10 +17,11 @@ assert($mysql && ! $mysql->connect_errno);
 $mysql->set_charset('utf8');
 
 {
-    echo "# insert, update\n";
+    echo "# delete, insert, update\n";
 
     $d = new DateTime();
-    $ext_columns = ['tags' => [$d->format('H:i:s'), 'TAG_A', 'TAG_B'], 'column_datetime' => $d->format('Y-m-d H:i:s')];
+    $ext_columns = ['column_any' => [$d->format('H:i:s'), 'TAG_A', 'TAG_B'], 'column_datetime' => $d->format('Y-m-d H:i:s')];
+$ext_columns['tags'] = null;
 
     $sqls = [];
     {
@@ -30,9 +31,13 @@ $mysql->set_charset('utf8');
 
         $columns = [];
         $values = [];
+        $delete_columns = [];
 
         foreach ($ext_columns as $k => $v){
-            if (is_string($v)){
+            if (is_null($v)){
+                $delete_columns[] = $k;
+            }
+            else if (is_string($v)){
                 $columns[] = $k;
                 $values[] = $v;
             }
@@ -42,25 +47,38 @@ $mysql->set_charset('utf8');
             }
         }
 
+        foreach ($delete_columns as $i => $column){
+            $sqls[] = "DELETE FROM "
+                . "`" . $mysql->escape_string($table) . "`"
+                . " WHERE "
+                . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "' "
+                . " AND "
+                . " `column` = '" . $mysql->escape_string($delete_columns[$i]) . "' "
+                . "";
+        }
+
         foreach ($columns as $i => $column){
             $sqls[] = "INSERT INTO `"
-                . $table
+                . $mysql->escape_string($table)
                 . "` (`foreign_key`, `column`, `type`, `value`) "
                 . " VALUES "
                 . " ('"
-                . $mysql->escape_string($foreign_key)
-                . "', '"
-                . $mysql->escape_string($columns[$i])
-                . "', '"
-                . "text/plain"
-                . "', '"
-                . $mysql->escape_string($values[$i])
-                . "') "
+                . $mysql->escape_string($foreign_key) . "'"
+                . ", '"
+                . $mysql->escape_string($columns[$i]) . "'"
+                . ", '"
+                . "text/plain" . "'"
+                . ", '"
+                . $mysql->escape_string($values[$i]) . "'"
+                . ") "
                 . " ON DUPLICATE KEY UPDATE "
-                . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "', "
-                . " `column` = '" . $mysql->escape_string($columns[$i]) . "', "
-                . " `type` = '" . "text/plain" . "', "
-                . " `value` = '" . $mysql->escape_string($values[$i]) . "' "
+                . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "'"
+                . ", "
+                . " `column` = '" . $mysql->escape_string($columns[$i]) . "'"
+                . ", "
+                . " `type` = '" . "text/plain" . "'"
+                . ", "
+                . " `value` = '" . $mysql->escape_string($values[$i]) . "'"
                 . "";
         }
     }
@@ -69,7 +87,7 @@ $mysql->set_charset('utf8');
     {
         $result = $mysql->multi_query(implode("; ", $sqls));
         assert($result);
-        // var_dump($mysql->error);
+        var_dump($mysql->error);
         
         do {
             $result = $mysql->store_result();
@@ -83,10 +101,9 @@ $mysql->set_charset('utf8');
 }
 
 echo "\n----------\n";
-
 {
     echo "# select\n";
-    $foreign_key = 264174;
+    $foreign_key = '19859';
     $result = $mysql->query("select * from `table1` where `foreign_key` = '" . $mysql->escape_string($foreign_key) . "'");
     assert($result);
     // var_dump($mysql->error);
