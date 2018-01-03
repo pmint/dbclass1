@@ -12,16 +12,34 @@ date_default_timezone_set('Asia/Tokyo');
 // mb_language('ja');
 // mb_internal_encoding('utf-8');
 
-$mysql = mysqli_connect('localhost', 'root', '', 'c9');
-assert($mysql && ! $mysql->connect_errno);
-$mysql->set_charset('utf8');
+connect();
+function connect(){
+    global $mysql;
+    global $connection_info;
 
+    $connection_info = [
+        mysql_user => getenv('mysql_user'),
+        mysql_password => getenv('mysql_password'),
+        mysql_host => getenv('mysql_host'),
+        mysql_dbname => getenv('mysql_dbname'),
+    ];
+    assert($connection_info);
+    
+    $mysql = mysqli_connect($connection_info['mysql_host'], $connection_info['mysql_user'], $connection_info['mysql_password'], $connection_info['mysql_dbname']);
+    assert($mysql && ! $mysql->connect_errno);
+    $mysql->set_charset('utf8');
+    return $mysql;
+}
+
+store();
+function store()
 {
+    global $mysql;
     echo "# delete, insert, update\n";
 
     $d = new DateTime();
     $ext_columns = ['column_any' => [$d->format('H:i:s'), 'TAG_A', 'TAG_B'], 'column_datetime' => $d->format('Y-m-d H:i:s')];
-$ext_columns['tags'] = null;
+    $ext_columns['tags'] = null;
 
     $sqls = [];
     {
@@ -31,6 +49,7 @@ $ext_columns['tags'] = null;
 
         $columns = [];
         $values = [];
+        $types = [];
         $delete_columns = [];
 
         foreach ($ext_columns as $k => $v){
@@ -40,16 +59,18 @@ $ext_columns['tags'] = null;
             else if (is_string($v)){
                 $columns[] = $k;
                 $values[] = $v;
+                $types[] = 'text/plain';
             }
             else {
                 $columns[] = $k;
                 $values[] = serialize($v);
+                $types[] = 'text/plain';
             }
         }
 
         foreach ($delete_columns as $i => $column){
             $sqls[] = "DELETE FROM "
-                . "`" . $mysql->escape_string($table) . "`"
+                . " `" . $mysql->escape_string($table) . "` "
                 . " WHERE "
                 . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "' "
                 . " AND "
@@ -58,27 +79,27 @@ $ext_columns['tags'] = null;
         }
 
         foreach ($columns as $i => $column){
-            $sqls[] = "INSERT INTO `"
-                . $mysql->escape_string($table)
-                . "` (`foreign_key`, `column`, `type`, `value`) "
+            $sqls[] = "INSERT INTO "
+                . " `" . $mysql->escape_string($table) . "` "
+                . " (`foreign_key`, `column`, `type`, `value`) "
                 . " VALUES "
-                . " ('"
-                . $mysql->escape_string($foreign_key) . "'"
-                . ", '"
-                . $mysql->escape_string($columns[$i]) . "'"
-                . ", '"
-                . "text/plain" . "'"
-                . ", '"
-                . $mysql->escape_string($values[$i]) . "'"
+                . " ("
+                . " '" . $mysql->escape_string($foreign_key) . "' "
+                . ", "
+                . " '" . $mysql->escape_string($columns[$i]) . "' "
+                . ", "
+                . " '" . $mysql->escape_string($types[$i]) . "' "
+                . ", "
+                . " '" . $mysql->escape_string($values[$i]) . "' "
                 . ") "
                 . " ON DUPLICATE KEY UPDATE "
-                . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "'"
+                . " `foreign_key` = '" . $mysql->escape_string($foreign_key) . "' "
                 . ", "
-                . " `column` = '" . $mysql->escape_string($columns[$i]) . "'"
+                . " `column` = '" . $mysql->escape_string($columns[$i]) . "' "
                 . ", "
-                . " `type` = '" . "text/plain" . "'"
+                . " `type` = '" . "text/plain" . "' "
                 . ", "
-                . " `value` = '" . $mysql->escape_string($values[$i]) . "'"
+                . " `value` = '" . $mysql->escape_string($values[$i]) . "' "
                 . "";
         }
     }
@@ -101,8 +122,12 @@ $ext_columns['tags'] = null;
 }
 
 echo "\n----------\n";
+fetch();
+function fetch()
 {
+    global $mysql;
     echo "# select\n";
+
     $foreign_key = '19859';
     $result = $mysql->query("select * from `table1` where `foreign_key` = '" . $mysql->escape_string($foreign_key) . "'");
     assert($result);
